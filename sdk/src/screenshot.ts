@@ -45,6 +45,14 @@ function redact(): () => void {
   };
 }
 
+// Icon-font glyphs (Material Symbols/Icons, Font Awesome) render as their
+// ligature words when fonts are skipped; leave them out of the capture.
+const ICON_FONT_CLASS = /(^|\s)(material-symbols[\w-]*|material-icons[\w-]*|fa[srlbd]?|fa-solid|fa-regular)(\s|$)/;
+function isIconFont(n: Element): boolean {
+  const c = n.getAttribute('class');
+  return !!c && ICON_FONT_CLASS.test(c);
+}
+
 function pageBackground(): string {
   for (const el of [document.body, document.documentElement]) {
     const c = el ? getComputedStyle(el).backgroundColor : '';
@@ -72,22 +80,29 @@ export async function captureViewport(highlight?: BoundingRect): Promise<Blob | 
   try {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const canvas = await withTimeout(
-      toCanvas(document.documentElement, {
-        width: w,
-        height: h,
-        canvasWidth: w,
-        canvasHeight: h,
-        style: { transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)` } as Partial<CSSStyleDeclaration>,
-        skipFonts: true,
-        cacheBust: true,
-        pixelRatio: 1,
-        backgroundColor: pageBackground(),
-        filter: (n: HTMLElement) =>
-          !(n instanceof Element && (n.hasAttribute('data-vf-ignore') || n.hasAttribute('data-vf-redact'))),
-      }),
-      TIMEOUT_MS,
-    );
+    const options = {
+      width: w,
+      height: h,
+      canvasWidth: w,
+      canvasHeight: h,
+      style: { transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)` } as Partial<CSSStyleDeclaration>,
+      skipFonts: true,
+      cacheBust: true,
+      pixelRatio: 1,
+      backgroundColor: pageBackground(),
+      filter: (n: HTMLElement) =>
+        !(n instanceof Element && (n.hasAttribute('data-vf-ignore') || n.hasAttribute('data-vf-redact') || isIconFont(n))),
+    };
+    // Capture <body>, not <html>: cloning <head> breaks the SVG render on apps
+    // that @import cross-origin stylesheets (e.g. Google Fonts into a cascade
+    // layer). Styles are inlined per node, so nothing visible is lost.
+    const deadline = Date.now() + TIMEOUT_MS;
+    let canvas: HTMLCanvasElement;
+    try {
+      canvas = await withTimeout(toCanvas(document.body, options), TIMEOUT_MS);
+    } catch {
+      canvas = await withTimeout(toCanvas(document.documentElement, options), Math.max(500, deadline - Date.now()));
+    }
     restore();
     if (highlight) {
       const ctx = canvas.getContext('2d');
