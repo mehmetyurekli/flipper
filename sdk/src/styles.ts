@@ -17,6 +17,11 @@ export const CSS_TEXT = `
 .vf-root textarea { font: inherit; color: inherit; margin: 0; }
 .vf-mono { font-family: var(--vf-mono); font-size: 11.5px; }
 
+html.vf-inspecting, html.vf-inspecting body, html.vf-inspecting body * { cursor: crosshair !important; }
+html.vf-inspecting .vf-root * { cursor: auto !important; }
+html.vf-inspecting .vf-root button, html.vf-inspecting .vf-root [role=button] { cursor: pointer !important; }
+html.vf-inspecting .vf-root textarea { cursor: text !important; }
+
 /* launcher */
 .vf-launcher { position: fixed; right: 20px; bottom: 20px; z-index: ${Z + 5}; display: flex; align-items: center; gap: 2px;
   padding: 4px; border-radius: 999px; background: #0f172a; color: #fff; box-shadow: 0 8px 24px rgba(15,23,42,.28), 0 0 0 1px rgba(255,255,255,.06) inset; }
@@ -55,7 +60,7 @@ export const CSS_TEXT = `
 .vf-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: var(--vf-accent-2); color: var(--vf-accent);
   font-size: 11px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vf-chip.vf-grey { background: #f1f5f9; color: var(--vf-ink-2); font-weight: 500; }
-.vf-file { margin-top: 4px; color: var(--vf-ink-2); word-break: break-all; }
+.vf-file { margin-top: 4px; color: var(--vf-ink-2); overflow-wrap: anywhere; }
 .vf-crumbs { margin-top: 3px; color: var(--vf-ink-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vf-body { padding: 12px 14px 12px; }
 .vf-ta { display: block; width: 100%; min-height: 84px; max-height: 240px; resize: vertical; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--vf-line);
@@ -73,7 +78,7 @@ export const CSS_TEXT = `
 @keyframes vf-rot { to { transform: rotate(360deg); } }
 
 /* toast */
-.vf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: ${Z + 6}; padding: 9px 14px; border-radius: 9px;
+.vf-toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: ${Z + 6}; padding: 9px 14px; border-radius: 9px;
   background: #0f172a; color: #fff; font-size: 13px; box-shadow: 0 10px 28px rgba(15,23,42,.3); display: flex; gap: 8px; align-items: center; animation: vf-in .16s ease-out; }
 .vf-toast.vf-err { background: #7f1d1d; }
 .vf-toast-ic { width: 16px; height: 16px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;
@@ -112,13 +117,14 @@ export const CSS_TEXT = `
 .vf-badge { flex: none; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
 .vf-badge.vf-open { background: var(--vf-amber-bg); color: var(--vf-amber); }
 .vf-badge.vf-resolved { background: var(--vf-green-bg); color: var(--vf-green); }
-.vf-meta { margin: 7px 0 0 28px; display: flex; flex-direction: column; gap: 3px; color: var(--vf-ink-2); }
+.vf-meta-wrap { margin: 7px 0 0 28px; display: flex; gap: 10px; align-items: flex-start; }
+.vf-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--vf-ink-2); }
 .vf-meta-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .vf-reply { margin: 8px 0 0 28px; padding: 7px 9px; border-radius: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
 .vf-reply-h { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--vf-green); margin-bottom: 2px; }
 .vf-foot { margin: 7px 0 0 28px; display: flex; gap: 8px; align-items: center; color: var(--vf-ink-3); font-size: 11.5px; }
 .vf-route { color: var(--vf-accent); font-weight: 550; }
-.vf-thumb { margin: 8px 0 0 28px; display: block; width: calc(100% - 28px); height: 90px; object-fit: cover; object-position: top left; border-radius: 6px; border: 1px solid var(--vf-line); }
+.vf-thumb { display: block; flex: none; width: 72px; height: 46px; object-fit: cover; object-position: top left; border-radius: 6px; border: 1px solid var(--vf-line); }
 .vf-err-line { padding: 8px 12px; margin: 0 8px 8px; border-radius: 8px; background: #fef2f2; color: #991b1b; font-size: 12px; }
 
 /* pins + pulse */

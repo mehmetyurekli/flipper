@@ -7,6 +7,8 @@ import type {
   InstanceStrategy,
   SourceLocation,
 } from './types';
+import { mapFrame } from './sourcemap';
+import type { RawFrame } from './sourcemap';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fiber = any;
@@ -69,7 +71,7 @@ export function normalizePath(raw: string): string {
   return p.replace(/^(\.\/)+/, '').replace(/^\/+/, '');
 }
 
-type Loc = { file: string; line: number; column?: number };
+type Loc = { file: string; line: number; column?: number; raw?: RawFrame; exact?: boolean };
 
 function fromDebugSource(f: Fiber): Loc | null {
   const s = f?._debugSource;
@@ -87,11 +89,13 @@ export function parseStack(stack: unknown): Loc | null {
   if (stack && typeof stack === 'object' && 'stack' in (stack as any)) text = (stack as any).stack;
   else if (typeof stack === 'string') text = stack;
   if (!text) return null;
-  for (const line of text.split('\n')) {
-    if (!line.includes('/src/') || line.includes('/node_modules/')) continue;
-    const m = FRAME_RE.exec(line.trim());
+  for (const frame of text.split('\n')) {
+    if (!frame.includes('/src/') || frame.includes('/node_modules/')) continue;
+    const m = FRAME_RE.exec(frame.trim());
     if (!m) continue;
-    return { file: normalizePath(m[1]), line: Number(m[2]), column: Number(m[3]) };
+    const line = Number(m[2]);
+    const column = Number(m[3]);
+    return { file: normalizePath(m[1]), line, column, raw: { url: m[1], line, column } };
   }
   return null;
 }
@@ -111,18 +115,21 @@ function fromDebugStack(f: Fiber): Loc | null {
  */
 export function fromInspectorAttrs(el: Element | null): Loc | null {
   let cur: Element | null = el;
+  const tag = el?.tagName.toLowerCase();
   while (cur && cur !== document.documentElement) {
     const rel = cur.getAttribute('data-inspector-relative-path');
     if (rel) {
       const line = Number(cur.getAttribute('data-inspector-line'));
       const col = Number(cur.getAttribute('data-inspector-column'));
-      if (line) return { file: normalizePath(rel), line, column: col || undefined };
+      if (line) return { file: normalizePath(rel), line, column: col || undefined, exact: cur === el };
     }
     const insp = cur.getAttribute('data-insp-path');
     if (insp) {
       // path may itself contain ':' (e.g. C:/...), so parse from the right: path:line:col:tag
-      const m = /^(.*):(\d+):(\d+)(?::[^:]*)?$/.exec(insp);
-      if (m) return { file: normalizePath(m[1]), line: Number(m[2]), column: Number(m[3]) };
+      const m = /^(.*):(\d+):(\d+)(?::([^:/]*))?$/.exec(insp);
+      // code-inspector-plugin forwards a component's *usage site* onto its root element;
+      // the trailing tag tells us whether this is the element's own JSX.
+      if (m) return { file: normalizePath(m[1]), line: Number(m[2]), column: Number(m[3]), exact: cur === el && (!m[4] || m[4] === tag) };
     }
     cur = cur.parentElement;
   }
@@ -161,7 +168,7 @@ export function summarizeProps(props: unknown): Record<string, unknown> | undefi
   const out: Record<string, unknown> = {};
   let n = 0;
   for (const [k, v] of Object.entries(props as Record<string, unknown>)) {
-    if (k === 'children' || k === 'key' || k === 'ref') continue;
+    if (k === 'children' || k === 'key' || k === 'ref' || k === 'data-insp-path' || k.startsWith('data-inspector-')) continue;
     if (n >= 40) break;
     const p = primitive(v);
     if (p !== undefined) {
@@ -285,6 +292,7 @@ export function resolveElement(el: Element): ResolvedContext {
 
   // --- hierarchy + nearest component (innermost first while walking) ---
   const walked: HierarchyEntry[] = [];
+  const walkedRaw: Array<RawFrame | undefined> = [];
   let keyed: Fiber | null = null;
   let nearestComponent: string | undefined;
   for (let f = fiber, guard = 0; f && guard < 500; f = f.return, guard++) {
@@ -308,9 +316,11 @@ export function resolveElement(el: Element): ResolvedContext {
         entry.line = loc.line;
       }
       walked.push(entry);
+      walkedRaw.push(loc?.raw);
     }
   }
   const hierarchy = walked.slice(0, MAX_HIERARCHY).reverse(); // outermost first
+  const hierarchyRaw = walkedRaw.slice(0, MAX_HIERARCHY).reverse();
 
   // --- source location ---
   let source: SourceLocation | undefined;
@@ -318,18 +328,21 @@ export function resolveElement(el: Element): ResolvedContext {
   const owner = fiber?._debugOwner;
   const ownerName = owner ? typeName(owner.type) : undefined;
   const component = usableName(ownerName) ? ownerName : nearestComponent;
+  // nearest fiber with a parsable owner stack (host fibers created from JSX carry one)
+  let stackLoc: Loc | null = null;
+  for (let f = fiber, i = 0; f && i < 50 && !stackLoc; f = f.return, i++) stackLoc = fromDebugStack(f);
+  const attrLoc = fromInspectorAttrs(el);
   let loc = fromDebugSource(fiber);
   if (loc) fileStrategy = 'debugSource';
-  if (!loc) {
-    loc = fromInspectorAttrs(el);
-    if (loc) fileStrategy = 'inspectorAttr';
+  if (!loc && attrLoc) {
+    loc = attrLoc;
+    fileStrategy = 'inspectorAttr';
   }
-  if (!loc) {
-    // nearest fiber with a parsable owner stack (host fibers created from JSX carry one)
-    for (let f = fiber, i = 0; f && i < 50 && !loc; f = f.return, i++) loc = fromDebugStack(f);
-    if (loc) fileStrategy = 'debugStack';
+  if (!loc && stackLoc) {
+    loc = stackLoc;
+    fileStrategy = 'debugStack';
   }
-  if (loc) source = { ...loc, component };
+  if (loc) source = { file: loc.file, line: loc.line, column: loc.column, component };
 
   // --- instance ---
   let instance: InstanceContext | undefined;
@@ -365,7 +378,7 @@ export function resolveElement(el: Element): ResolvedContext {
   const attrs = elementAttributes(el);
   if (attrs) element.attributes = attrs;
 
-  return {
+  const result: ResolvedContext = {
     element,
     source,
     instance,
@@ -375,6 +388,46 @@ export function resolveElement(el: Element): ResolvedContext {
     scrollPosition: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
     userAgent: navigator.userAgent,
   };
+  pending.set(result, { stackRaw: stackLoc?.raw, attrExact: attrLoc?.exact ?? false, hierarchyRaw });
+  return result;
+}
+
+const pending = new WeakMap<ResolvedContext, { stackRaw?: RawFrame; attrExact: boolean; hierarchyRaw: Array<RawFrame | undefined> }>();
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+}
+
+/**
+ * Async refinement: maps owner-stack positions through Vite's inline source maps so
+ * debugStack lines (and hierarchy lines) are real source lines. If the inspector attribute
+ * only described the component's usage site (code-inspector-plugin on a component root),
+ * the element's own JSX location from the mapped stack wins. Never throws.
+ */
+export async function enrichContext(ctx: ResolvedContext): Promise<ResolvedContext> {
+  const info = pending.get(ctx);
+  if (!info) return ctx;
+  try {
+    const work = async () => {
+      const out: ResolvedContext = { ...ctx, hierarchy: ctx.hierarchy.map((h) => ({ ...h })) };
+      const mappedH = await Promise.all(info.hierarchyRaw.map((r) => (r ? mapFrame(r) : Promise.resolve(null))));
+      mappedH.forEach((m, i) => {
+        if (m) out.hierarchy[i].line = m.line;
+      });
+      const fs = ctx.discovery.fileStrategy;
+      if (info.stackRaw && (fs === 'debugStack' || (fs === 'inspectorAttr' && !info.attrExact))) {
+        const m = await mapFrame(info.stackRaw);
+        if (m) {
+          out.source = { file: normalizePath(info.stackRaw.url), line: m.line, column: m.column, component: ctx.source?.component };
+          out.discovery = { ...ctx.discovery, fileStrategy: 'debugStack' };
+        }
+      }
+      return out;
+    };
+    return await withTimeout(work(), 1500, ctx);
+  } catch {
+    return ctx;
+  }
 }
 
 /** Cheap label for the hover overlay: "ComponentName · key". */
