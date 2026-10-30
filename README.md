@@ -48,7 +48,10 @@ Put the project id into faltona-web in two places. In `faltona-web/.env`, add:
 ```
 VITE_VF_PROJECT_ID=<project id>
 VITE_VF_BACKEND_URL=http://localhost:4100
+FLIPPER_SDK=/ABSOLUTE/PATH/flipper/sdk
 ```
+
+`FLIPPER_SDK` is optional when flipper sits next to faltona-web.
 
 In `faltona-web/.mcp.json`, replace `REPLACE_WITH_SEEDED_PROJECT_ID` with the same id.
 
@@ -64,7 +67,7 @@ If another MongoDB already uses port 27017, set `FLIPPER_MONGO_PORT=27018` and `
 
 ### How faltona-web loads the SDK
 
-Its `vite.config.ts` aliases `@flipper/sdk` to `../flipper/sdk/src` during `vite dev` when that folder exists. Otherwise, and always in production builds, it points to a stub. faltona-web therefore builds and deploys without flipper, and the overlay never ships.
+Its `vite.config.ts` aliases `@flipper/sdk` to the SDK source during `vite dev`. The SDK folder comes from `FLIPPER_SDK` in faltona-web's `.env`, for example `FLIPPER_SDK=/Users/me/flipper/sdk`. Without it, the config looks for a sibling `../flipper/sdk`. When the SDK isn't found, or in any production build, it points to a stub. On startup, the dev server prints a `[flipper] overlay on` or `[flipper] overlay off` line that says which case applies. faltona-web therefore builds and deploys without flipper, and the overlay never ships.
 
 No build plugin is needed for source locations. React 19 removed `_debugSource`, and `@vitejs/plugin-react` 6 has no Babel hook, so the SDK reads each fiber's `_debugStack` instead. It maps that stack back to the original line through the inline source maps Vite serves in dev mode.
 
