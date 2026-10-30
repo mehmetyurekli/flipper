@@ -1,0 +1,15 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: flipper-mongo
+    ports:
+      - "${FLIPPER_MONGO_PORT:-27017}:27017"
+    volumes:
+      - flipper-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  flipper-mongo-data:

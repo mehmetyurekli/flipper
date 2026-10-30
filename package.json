@@ -1,0 +1,14 @@
+{
+  "name": "flipper",
+  "private": true,
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "install:all": "npm --prefix backend install && npm --prefix mcp-server install && npm --prefix sdk install",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:sdk": "npm --prefix sdk run dev",
+    "build": "npm --prefix backend run build && npm --prefix mcp-server run build && npm --prefix sdk run build",
+    "seed": "npm --prefix backend run seed"
+  }
+}
