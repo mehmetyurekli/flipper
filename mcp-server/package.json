@@ -1,0 +1,24 @@
+{
+  "name": "flipper-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "flipper-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "sync-types": "node -e \"require('fs').copyFileSync('../shared/types.ts','src/shared-types.ts')\"",
+    "prebuild": "npm run sync-types",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
